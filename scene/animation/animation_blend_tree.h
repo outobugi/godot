@@ -388,6 +388,45 @@ public:
 	AnimationNodeTransition();
 };
 
+class AnimationNodeLayer : public AnimationNodeSync {
+	GDCLASS(AnimationNodeLayer, AnimationNodeSync);
+
+	StringName blend_amount = PNAME("blend_amount");
+	StringName internal_blend_amount = PNAME("internal_blend_amount");
+	StringName active = PNAME("active");
+
+private:
+	bool oneshot = false;
+	bool exclusive_sync = true;
+	double fade_in = 0.0;
+	double fade_out = 0.0;
+	double fade_in_inv = 1.0;
+	double fade_out_inv = 1.0;
+
+protected:
+	static void _bind_methods();
+
+public:
+	virtual void get_parameter_list(List<PropertyInfo> *r_list) const override;
+	virtual Variant get_parameter_default_value(const StringName &p_parameter) const override;
+
+	virtual String get_caption() const override;
+	virtual NodeTimeInfo _process(const AnimationMixer::PlaybackInfo p_playback_info, bool p_test_only = false) override;
+
+	virtual bool has_filter() const override;
+
+	void set_oneshot(bool p_enable);
+	bool is_oneshot() const;
+	void set_exclusive_sync(bool p_enable);
+	bool is_exclusive_sync() const;
+	void set_fade_in_time(double p_time);
+	double get_fade_in_time() const;
+	void set_fade_out_time(double p_time);
+	double get_fade_out_time() const;
+
+	AnimationNodeLayer();
+};
+
 class AnimationNodeOutput : public AnimationNode {
 	GDCLASS(AnimationNodeOutput, AnimationNode);
 

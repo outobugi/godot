@@ -1466,6 +1466,143 @@ void AnimationNodeTransition::_bind_methods() {
 AnimationNodeTransition::AnimationNodeTransition() {
 }
 
+//////////////////////////////////////
+
+void AnimationNodeLayer::get_parameter_list(List<PropertyInfo> *r_list) const {
+	AnimationNode::get_parameter_list(r_list);
+	r_list->push_back(PropertyInfo(Variant::BOOL, active, PROPERTY_HINT_NONE));
+	r_list->push_back(PropertyInfo(Variant::FLOAT, blend_amount, PROPERTY_HINT_RANGE, "0,1,0.01"));
+	r_list->push_back(PropertyInfo(Variant::FLOAT, internal_blend_amount, PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NONE));
+}
+
+Variant AnimationNodeLayer::get_parameter_default_value(const StringName &p_parameter) const {
+	Variant ret = AnimationNode::get_parameter_default_value(p_parameter);
+	if (ret != Variant()) {
+		return ret;
+	}
+
+	if (p_parameter == active) {
+		return false;
+	}
+	if (p_parameter == blend_amount) {
+		return 1.0;
+	}
+
+	return 0.0; // For internal blend amount.
+}
+
+String AnimationNodeLayer::get_caption() const {
+	return "Layer";
+}
+
+AnimationNode::NodeTimeInfo AnimationNodeLayer::_process(const AnimationMixer::PlaybackInfo p_playback_info, bool p_test_only) {
+	bool is_active = get_parameter(active);
+	double internal_amount = get_parameter(internal_blend_amount);
+
+	AnimationMixer::PlaybackInfo pi = p_playback_info;
+
+	if (is_active) {
+		if (fade_in <= 0.0) {
+			internal_amount = 1.0;
+		} else {
+			internal_amount = MIN(1.0, internal_amount + pi.delta * fade_in_inv);
+		}
+	} else {
+		if (fade_out <= 0.0) {
+			internal_amount = 0.0;
+		} else {
+			internal_amount = MAX(0.0, internal_amount - pi.delta * fade_out_inv);
+		}
+	}
+
+	if (Math::is_zero_approx(internal_amount)) {
+		internal_amount = 0.0;
+	}
+
+	set_parameter(internal_blend_amount, internal_amount);
+
+	double amount = get_parameter(blend_amount);
+	internal_amount *= amount;
+
+	pi.weight = 1.0 - internal_amount;
+	NodeTimeInfo nti0 = blend_input(0, pi, FILTER_BLEND, sync, p_test_only);
+	pi.weight = internal_amount;
+	NodeTimeInfo nti1 = blend_input(1, pi, FILTER_PASS, sync && !exclusive_sync, p_test_only);
+
+	if (oneshot && nti1.get_remain(true) <= fade_out) {
+		set_parameter(active, false);
+	}
+
+	return internal_amount > 0.5 ? nti1 : nti0;
+}
+
+bool AnimationNodeLayer::has_filter() const {
+	return true;
+}
+
+void AnimationNodeLayer::set_oneshot(bool p_enable) {
+	oneshot = p_enable;
+}
+
+bool AnimationNodeLayer::is_oneshot() const {
+	return oneshot;
+}
+
+void AnimationNodeLayer::set_exclusive_sync(bool p_enable) {
+	exclusive_sync = p_enable;
+}
+
+bool AnimationNodeLayer::is_exclusive_sync() const {
+	return exclusive_sync;
+}
+
+void AnimationNodeLayer::set_fade_in_time(double p_time) {
+	fade_in = p_time;
+	if (fade_in > 0.0) {
+		fade_in_inv = 1.0 / fade_in;
+		return;
+	}
+	fade_in_inv = 1.0;
+}
+
+double AnimationNodeLayer::get_fade_in_time() const {
+	return fade_in;
+}
+
+void AnimationNodeLayer::set_fade_out_time(double p_time) {
+	fade_out = p_time;
+	if (fade_out > 0.0) {
+		fade_out_inv = 1.0 / fade_out;
+		return;
+	}
+	fade_out_inv = 1.0;
+}
+
+double AnimationNodeLayer::get_fade_out_time() const {
+	return fade_out;
+}
+
+void AnimationNodeLayer::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("set_oneshot", "enable"), &AnimationNodeLayer::set_oneshot);
+	ClassDB::bind_method(D_METHOD("is_oneshot"), &AnimationNodeLayer::is_oneshot);
+	ClassDB::bind_method(D_METHOD("set_exclusive_sync", "enable"), &AnimationNodeLayer::set_exclusive_sync);
+	ClassDB::bind_method(D_METHOD("is_exclusive_sync"), &AnimationNodeLayer::is_exclusive_sync);
+	ClassDB::bind_method(D_METHOD("set_fadein_time", "time"), &AnimationNodeLayer::set_fade_in_time);
+	ClassDB::bind_method(D_METHOD("get_fadein_time"), &AnimationNodeLayer::get_fade_in_time);
+	ClassDB::bind_method(D_METHOD("set_fadeout_time", "time"), &AnimationNodeLayer::set_fade_out_time);
+	ClassDB::bind_method(D_METHOD("get_fadeout_time"), &AnimationNodeLayer::get_fade_out_time);
+
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "oneshot", PROPERTY_HINT_NONE), "set_oneshot", "is_oneshot");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "exclusive_sync", PROPERTY_HINT_NONE), "set_exclusive_sync", "is_exclusive_sync");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "fadein_time", PROPERTY_HINT_RANGE, "0,60,0.01,or_greater,suffix:s"), "set_fadein_time", "get_fadein_time");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "fadeout_time", PROPERTY_HINT_RANGE, "0,60,0.01,or_greater,suffix:s"), "set_fadeout_time", "get_fadeout_time");
+}
+
+AnimationNodeLayer::AnimationNodeLayer() {
+	add_input("in");
+	add_input("layer");
+}
+
 /////////////////////
 
 String AnimationNodeOutput::get_caption() const {
